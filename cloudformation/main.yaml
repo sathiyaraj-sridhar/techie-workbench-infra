@@ -1,0 +1,249 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Provisioning AWS resources for Techie Workbench application.
+Metadata:
+  TemplateName: TechieWorkbench
+  TemplateVersion: '1.0'
+  Author: Bob
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      -
+        Label:
+          default: "Common Configuration"
+        Parameters:
+          - ProjectShortName
+          - Environment
+          - EnvironmentUnit
+      -
+        Label:
+          default: "Network Configuration"
+        Parameters:
+          - CidrBlock
+          - AvailabilityZones
+          - NatSubnetIpBlocks
+          - LbSubnetIpBlocks
+          - AppSubnetIpBlocks
+Parameters:
+  ProjectShortName:
+    Type: String
+    Default: tw
+    Description: Enter short name of the project.
+  Environment:
+    Type: String
+    Default: prod
+    Description: Enter environment.
+  EnvironmentUnit:
+    Type: String
+    Default: 02
+    Description: Enter environment unit.
+  CidrBlock:
+    Type: String
+    Default: 10.2.0.0/16
+    Description: Enter IPv4 network range for VPC.
+  AvailabilityZones:
+    Description: An array of Availability Zones for a region, such as us-west-2a, us-west-2b.
+    Type: "List<AWS::EC2::AvailabilityZone::Name>"
+  NatSubnetIpBlocks:
+    Description: "Comma-delimited list of CIDR blocks for App subnets."
+    Type: CommaDelimitedList
+    Default: "10.2.1.0/24, 10.2.2.0/24"
+  LbSubnetIpBlocks:
+    Description: "Comma-delimited list of CIDR blocks for App subnets."
+    Type: CommaDelimitedList
+    Default: "10.2.3.0/24, 10.2.4.0/24"
+  AppSubnetIpBlocks:
+    Description: "Comma-delimited list of CIDR blocks for App subnets."
+    Type: CommaDelimitedList
+    Default: "10.2.5.0/24, 10.2.6.0/24"
+Mappings:
+  EnvironmentConfig:
+    dev:
+      InstanceType: t3a.nano
+    test:
+      InstanceType: t3a.nano
+    prod:
+      InstanceType: t3a.nano
+Resources:
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref CidrBlock
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      InstanceTenancy: default
+      Tags:
+        - Key: Name
+          Value: !Join
+            - '-'
+            - - !Ref ProjectShortName
+              - !Ref Environment
+              - !Ref EnvironmentUnit
+              - 'vpc'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectShortName
+  NatSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Select [0, !Ref AvailabilityZones]
+      CidrBlock: !Select [0, !Ref NatSubnetIpBlocks]
+      Tags: 
+        - Key: Name
+          Value: !Join
+            - '-'
+            - - !Ref ProjectShortName
+              - !Ref Environment
+              - !Ref EnvironmentUnit
+              - 'nat'
+              - 'snet'
+              - '01'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectShortName
+  NatSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [1, !Ref AvailabilityZones]
+      VpcId: !Ref Vpc
+      CidrBlock: !Select [1, !Ref NatSubnetIpBlocks]
+      Tags: 
+        - Key: Name
+          Value: !Join
+            - '-'
+            - - !Ref ProjectShortName
+              - !Ref Environment
+              - !Ref EnvironmentUnit
+              - 'nat'
+              - 'snet'
+              - '02'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectShortName
+  LbSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [0, !Ref AvailabilityZones]
+      VpcId: !Ref Vpc
+      CidrBlock: !Select [0, !Ref LbSubnetIpBlocks]
+      Tags:
+        - Key: Name
+          Value: !Join
+            - '-'
+            - - !Ref ProjectShortName
+              - !Ref Environment
+              - !Ref EnvironmentUnit
+              - 'lb'
+              - 'snet'
+              - '01'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectShortName
+  LbSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [1, !Ref AvailabilityZones]
+      VpcId: !Ref Vpc
+      CidrBlock: !Select [1, !Ref LbSubnetIpBlocks]
+      Tags:
+        - Key: Name
+          Value: !Join
+            - '-'
+            - - !Ref ProjectShortName
+              - !Ref Environment
+              - !Ref EnvironmentUnit
+              - 'lb'
+              - 'snet'
+              - '02'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectShortName
+  AppSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [0, !Ref AvailabilityZones]
+      VpcId: !Ref Vpc
+      CidrBlock: !Select [0, !Ref AppSubnetIpBlocks]
+      Tags:
+        - Key: Name
+          Value: !Join
+            - '-'
+            - - !Ref ProjectShortName
+              - !Ref Environment
+              - !Ref EnvironmentUnit
+              - 'app'
+              - 'snet'
+              - '01'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectShortName
+  AppSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [1, !Ref AvailabilityZones]
+      VpcId: !Ref Vpc
+      CidrBlock: !Select [1, !Ref AppSubnetIpBlocks]
+      Tags:
+        - Key: Name
+          Value: !Join
+            - '-'
+            - - !Ref ProjectShortName
+              - !Ref Environment
+              - !Ref EnvironmentUnit
+              - 'app'
+              - 'snet'
+              - '02'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectShortName
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Join
+            - '-'
+            - - !Ref ProjectShortName
+              - !Ref Environment
+              - !Ref EnvironmentUnit
+              - 'igw'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectShortName
+  InternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref Vpc
+Outputs:
+  VpcId:
+    Description: The VPC ID
+    Value: !Ref Vpc
+  NatSubnet1Id:
+    Description: The NAT subnet 01 ID
+    Value: !Ref NatSubnet1
+  NatSubnet2Id:
+    Description: The NAT subnet 02 ID
+    Value: !Ref NatSubnet2
+  LbSubnet1Id:
+    Description: The Load Balancer subnet 01 ID
+    Value: !Ref LbSubnet1
+  LbSubnet2Id:
+    Description: The Load Balancer subnet 02 ID
+    Value: !Ref LbSubnet2
+  AppSubnet1Id:
+    Description: The App subnet 01 ID
+    Value: !Ref AppSubnet1
+  AppSubnet2Id:
+    Description: The App subnet 02 ID
+    Value: !Ref AppSubnet2
+  InternetGatewayId:
+    Description: The Internet Gateway ID
+    Value: !Ref InternetGateway
