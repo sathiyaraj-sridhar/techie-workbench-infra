@@ -13,6 +13,7 @@ Metadata:
           - ProjectShortName
           - Environment
           - EnvironmentUnit
+          - LocalCidrBlock
       -
         Label:
           default: "Network Configuration"
@@ -35,6 +36,10 @@ Parameters:
     Type: String
     Default: 02
     Description: Enter environment unit.
+  LocalCidrBlock:
+    Type: String
+    Default: 0.0.0.0/0
+    Description: Enter IPv4 network range of your local network or your computer.
   CidrBlock:
     Type: String
     Default: 10.2.0.0/16
@@ -43,17 +48,21 @@ Parameters:
     Description: An array of Availability Zones for a region, such as us-west-2a, us-west-2b.
     Type: "List<AWS::EC2::AvailabilityZone::Name>"
   NatSubnetIpBlocks:
-    Description: "Comma-delimited list of CIDR blocks for App subnets."
+    Description: "Comma-delimited list of CIDR blocks for NAT subnets."
     Type: CommaDelimitedList
     Default: "10.2.1.0/24, 10.2.2.0/24"
   LbSubnetIpBlocks:
-    Description: "Comma-delimited list of CIDR blocks for App subnets."
+    Description: "Comma-delimited list of CIDR blocks for Load Balancer subnets."
     Type: CommaDelimitedList
     Default: "10.2.3.0/24, 10.2.4.0/24"
   AppSubnetIpBlocks:
     Description: "Comma-delimited list of CIDR blocks for App subnets."
     Type: CommaDelimitedList
     Default: "10.2.5.0/24, 10.2.6.0/24"
+  RedisSubnetIpBlocks:
+    Description: "Comma-delimited list of CIDR blocks for Redis subnets."
+    Type: CommaDelimitedList
+    Default: "10.2.7.0/24, 10.2.8.0/24"
 Mappings:
   EnvironmentConfig:
     dev:
@@ -202,6 +211,178 @@ Resources:
           Value: !Ref Environment
         - Key: Project
           Value: !Ref ProjectShortName
+  RedisSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [0, !Ref AvailabilityZones]
+      VpcId: !Ref Vpc
+      CidrBlock: !Select [0, !Ref RedisSubnetIpBlocks]
+      Tags:
+        - Key: Name
+          Value: !Join
+            - '-'
+            - - !Ref ProjectShortName
+              - !Ref Environment
+              - !Ref EnvironmentUnit
+              - 'redis'
+              - 'snet'
+              - '01'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectShortName
+  RedisSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Select [1, !Ref AvailabilityZones]
+      VpcId: !Ref Vpc
+      CidrBlock: !Select [1, !Ref RedisSubnetIpBlocks]
+      Tags:
+        - Key: Name
+          Value: !Join
+            - '-'
+            - - !Ref ProjectShortName
+              - !Ref Environment
+              - !Ref EnvironmentUnit
+              - 'redis'
+              - 'snet'
+              - '02'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectShortName
+  NatSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Join
+        - '-'
+        - - !Ref ProjectShortName
+          - !Ref Environment
+          - !Ref EnvironmentUnit
+          - 'nat'
+          - 'sg'
+      GroupDescription: Security group to NAT instance
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref LocalCidrBlock
+        - IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1
+          CidrIp: !Ref CidrBlock
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Ref CidrBlock
+      Tags:
+        - Key: Name
+          Value: !Join
+            - '-'
+            - - !Ref ProjectShortName
+              - !Ref Environment
+              - !Ref EnvironmentUnit
+              - 'nat'
+              - 'sg'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectShortName
+  LbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Join
+        - '-'
+        - - !Ref ProjectShortName
+          - !Ref Environment
+          - !Ref EnvironmentUnit
+          - 'lb'
+          - 'sg'
+      GroupDescription: Security group to Load Balancer instance
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Join
+            - '-'
+            - - !Ref ProjectShortName
+              - !Ref Environment
+              - !Ref EnvironmentUnit
+              - 'lb'
+              - 'sg'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectShortName
+  AppSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Join
+        - '-'
+        - - !Ref ProjectShortName
+          - !Ref Environment
+          - !Ref EnvironmentUnit
+          - 'app'
+          - 'sg'
+      GroupDescription: Security group to App instance
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 2000
+          ToPort: 2000
+          SourceSecurityGroupId: !Ref LbSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Join
+            - '-'
+            - - !Ref ProjectShortName
+              - !Ref Environment
+              - !Ref EnvironmentUnit
+              - 'app'
+              - 'sg'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectShortName
+  RedisSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Join
+        - '-'
+        - - !Ref ProjectShortName
+          - !Ref Environment
+          - !Ref EnvironmentUnit
+          - 'redis'
+          - 'sg'
+      GroupDescription: Security group to Redis instance
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 6379
+          ToPort: 6379
+          SourceSecurityGroupId: !Ref AppSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Join
+            - '-'
+            - - !Ref ProjectShortName
+              - !Ref Environment
+              - !Ref EnvironmentUnit
+              - 'redis'
+              - 'sg'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectShortName
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
@@ -217,11 +398,92 @@ Resources:
           Value: !Ref Environment
         - Key: Project
           Value: !Ref ProjectShortName
-  InternetGatewayAttachment:
+  AttachInternetGatewayToVpc:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
       InternetGatewayId: !Ref InternetGateway
       VpcId: !Ref Vpc
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Join
+            - '-'
+            - - !Ref ProjectShortName
+              - !Ref Environment
+              - !Ref EnvironmentUnit
+              - 'rt'
+              - 'public'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectShortName
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Join
+            - '-'
+            - - !Ref ProjectShortName
+              - !Ref Environment
+              - !Ref EnvironmentUnit
+              - 'rt'
+              - 'private'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Project
+          Value: !Ref ProjectShortName
+  RouteToInternetGateway:
+    Type: AWS::EC2::Route
+    DependsOn: AttachInternetGatewayToVpc
+    Properties:
+       RouteTableId: !Ref PublicRouteTable
+       DestinationCidrBlock: 0.0.0.0/0
+       GatewayId: !Ref InternetGateway
+  AssociateNatSubnet1WithPublicRouteTable:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref NatSubnet1
+      RouteTableId: !Ref PublicRouteTable
+  AssociateNatSubnet2WithPublicRouteTable:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref NatSubnet2
+      RouteTableId: !Ref PublicRouteTable
+  AssociateLbSubnet1WithPublicRouteTable:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref LbSubnet1
+      RouteTableId: !Ref PublicRouteTable
+  AssociateLbSubnet2WithPublicRouteTable:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref LbSubnet2
+      RouteTableId: !Ref PublicRouteTable
+  AssociateAppSubnet1WithPrivateRouteTable:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref AppSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+  AssociateAppSubnet2WithPrivateRouteTable:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref AppSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+  AssociateRedisSubnet1WithPrivateRouteTable:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref RedisSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+  AssociateRedisSubnet2WithPrivateRouteTable:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref RedisSubnet2
+      RouteTableId: !Ref PrivateRouteTable
 Outputs:
   VpcId:
     Description: The VPC ID
@@ -244,6 +506,30 @@ Outputs:
   AppSubnet2Id:
     Description: The App subnet 02 ID
     Value: !Ref AppSubnet2
+  RedisSubnet1Id:
+    Description: The Redis subnet 01 ID
+    Value: !Ref RedisSubnet1
+  RedisSubnet2Id:
+    Description: The Redis subnet 02 ID
+    Value: !Ref RedisSubnet2
+  NatSecurityGroupId:
+    Description: The NAT security group ID
+    Value: !Ref NatSecurityGroup
+  LbSecurityGroupId:
+    Description: The Load Balancer security group ID
+    Value: !Ref LbSecurityGroup
+  AppSecurityGroupId:
+    Description: The App security group ID
+    Value: !Ref AppSecurityGroup
+  RedisSecurityGroupId:
+    Description: The Redis security group ID
+    Value: !Ref RedisSecurityGroup
   InternetGatewayId:
     Description: The Internet Gateway ID
     Value: !Ref InternetGateway
+  PublicRouteTableId:
+    Description: The Public Route Table ID
+    Value: !Ref PublicRouteTable
+  PrivateRouteTableId:
+    Description: The Private Route Table ID
+    Value: !Ref PrivateRouteTable
